@@ -30,6 +30,9 @@ type Game struct {
 	players []*Player
 }
 
+const MinPlayers = 2
+const MaxPoints = 11
+
 func play(player *Player, in <-chan Shot, done chan struct{}, players []*Player, pongs map[*Player]chan Shot) {
 	for {
 		select {
@@ -39,7 +42,7 @@ func play(player *Player, in <-chan Shot, done chan struct{}, players []*Player,
 			if pong.shotType == Miss {
 				pong.source.score++
 				fmt.Printf("Player %s shot at player %s and missed, and increased its score to %d\n", pong.source.name, player.name, pong.source.score)
-				if pong.source.score == 11 {
+				if pong.source.score == MaxPoints {
 					close(done)
 					return
 				}
@@ -102,14 +105,14 @@ func pickWeightedTarget(players []*Player, exclude *Player) *Player {
 func (g *Game) ReportResults() {
 	var winner *Player
 	for _, p := range g.players {
-		if p.score >= 11 {
+		if p.score >= MaxPoints {
 			winner = p
 			break
 		}
 	}
 
 	if winner != nil {
-		fmt.Printf("\nPlayer %s reached 11 points and lost!\n", winner.name)
+		fmt.Printf("\nPlayer %s reached %d points and lost!\n", winner.name, MaxPoints)
 	}
 
 	fmt.Println("Final scores:")
@@ -132,8 +135,8 @@ func main() {
 		name := strings.TrimSpace(input)
 
 		if strings.ToLower(name) == "done" {
-			if len(players) < 2 {
-				fmt.Println("You need at least 2 players to start the game.")
+			if len(players) < MinPlayers {
+				fmt.Println(fmt.Sprintf("You need atleast %d players!", MinPlayers))
 				continue
 			}
 			break
@@ -145,10 +148,6 @@ func main() {
 		}
 
 		players = append(players, &Player{name, 0})
-	}
-
-	if len(players) < 2 {
-		panic("You need min 2 players!")
 	}
 
 	var server *Player
@@ -186,14 +185,7 @@ func main() {
 		go play(player, pongs[player], gameOver, game.players, pongs)
 	}
 
-	var firstTarget *Player
-	for {
-		firstTarget = players[rand.Intn(len(players))]
-		if firstTarget != server {
-			break
-		}
-	}
-
+	firstTarget := pickWeightedTarget(game.players, server)
 	pongs[firstTarget] <- Shot{server, Serve}
 	<-gameOver
 	game.ReportResults()
